@@ -1,0 +1,170 @@
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>RUBÍ TICKETING | Lector QR</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 24px 16px;
+      background: #f5f1e9;
+      color: #17243b;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    .panel {
+      max-width: 480px;
+      margin: 30px auto;
+      padding: 26px 20px;
+      background: white;
+      border-radius: 18px;
+      box-shadow: 0 8px 30px #17243b18;
+    }
+    h1 { font-size: 25px; margin-bottom: 5px; }
+    .sub { color: #737987; margin-bottom: 25px; }
+    #reader {
+      width: 100%;
+      overflow: hidden;
+      border-radius: 12px;
+    }
+    button {
+      width: 100%;
+      padding: 16px;
+      margin-top: 14px;
+      border: 0;
+      border-radius: 10px;
+      background: #17243b;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+    }
+    button.secondary { background: #e9eaf0; color: #17243b; }
+    #status { margin-top: 18px; color: #626978; }
+    #result {
+      display: none;
+      margin-top: 18px;
+      padding: 16px;
+      border-radius: 10px;
+      background: #eef5ef;
+      overflow-wrap: anywhere;
+    }
+  </style>
+</head>
+<body>
+  <main class="panel">
+    <h1>RUBÍ TICKETING</h1>
+    <p class="sub">Lector automático de códigos QR</p>
+
+    <div id="reader"></div>
+
+    <button id="startButton" onclick="startScanner()">
+      ACTIVAR ESCÁNER
+    </button>
+
+    <button class="secondary" onclick="stopScanner()">
+      DETENER CÁMARA
+    </button>
+
+    <p id="status">Pulsa activar para iniciar la cámara.</p>
+
+    <div id="result">
+      <strong>¡Código QR detectado!</strong>
+      <p id="qrValue"></p>
+      <button class="secondary" onclick="scanAgain()">ESCANEAR OTRO</button>
+    </div>
+  </main>
+
+  <script>
+    let scanner = null;
+    let running = false;
+
+    async function startScanner() {
+      const status = document.getElementById("status");
+      const button = document.getElementById("startButton");
+      const result = document.getElementById("result");
+
+      result.style.display = "none";
+      button.disabled = true;
+      status.textContent = "Solicitando acceso a la cámara...";
+
+      try {
+        if (!navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia) {
+          throw new Error(
+            "Este navegador no permite acceder a la cámara. Abre el enlace en Safari."
+          );
+        }
+
+        scanner = new Html5Qrcode("reader");
+
+        const cameras = await Html5Qrcode.getCameras();
+
+        if (!cameras || cameras.length === 0) {
+          throw new Error("No se encontró ninguna cámara.");
+        }
+
+        const backCamera = cameras.find(camera =>
+          /back|rear|environment|trasera|posterior/i.test(camera.label)
+        );
+
+        const cameraId = backCamera
+          ? backCamera.id
+          : cameras[cameras.length - 1].id;
+
+        await scanner.start(
+          cameraId,
+          {
+            fps: 10,
+            qrbox: { width: 240, height: 240 },
+            aspectRatio: 1
+          },
+          onScanSuccess,
+          () => {}
+        );
+
+        running = true;
+        status.textContent = "Cámara activa. Enfoca un código QR.";
+      } catch (error) {
+        status.textContent = "No se pudo iniciar: " +
+          (error.message || error);
+        button.disabled = false;
+      }
+    }
+
+    async function onScanSuccess(decodedText) {
+      if (!running) return;
+
+      running = false;
+      document.getElementById("qrValue").textContent = decodedText;
+      document.getElementById("result").style.display = "block";
+      document.getElementById("status").textContent =
+        "Código detectado correctamente.";
+
+      await stopScanner();
+    }
+
+    async function stopScanner() {
+      if (scanner && running) {
+        try {
+          await scanner.stop();
+          await scanner.clear();
+        } catch (error) {}
+      }
+
+      running = false;
+      scanner = null;
+      document.getElementById("startButton").disabled = false;
+    }
+
+    async function scanAgain() {
+      await stopScanner();
+      document.getElementById("result").style.display = "none";
+      startScanner();
+    }
+  </script>
+</body>
+</html>
